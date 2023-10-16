@@ -6,7 +6,11 @@ Completed Assignment 1 for the Cloud Computing & Big Data
 class at Columbia University and New York University, Fall 2023.
 
 The project implements various AWS services, to create a chatbot that gathers information
-from the user about a requested restaurant reservation, and sends a confirmation email.  
+from the user about a requested restaurant reservation, and sends a confirmation email. 
+
+Team members:
+Anna Nefedenkova (an3143)
+Shivam Shekhar (ss6960)
 
 ## Usage ##
 
