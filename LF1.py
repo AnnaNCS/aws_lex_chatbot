@@ -12,25 +12,16 @@ from datetime import datetime
 logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
 
-
-# --------------------------------SQS Fun-------------------------------------#
-
+# Pushing the lex reservation message to the sqs 
 def push_to_sqs(event):
-    print(event)
-    
     cuisine = check_key_error(lambda: event['sessionState']['intent']['slots']['Cuisine']['value']['interpretedValue'])
-        
     city = check_key_error(lambda: event['sessionState']['intent']['slots']['City']['value']['interpretedValue'])
-    
     ParticipantCount = check_key_error(lambda: event['sessionState']['intent']['slots']['People']['value']['interpretedValue'])
-    
     date = check_key_error(lambda: event['sessionState']['intent']['slots']['Date']['value']['interpretedValue'])
-
     time = check_key_error(lambda: event['sessionState']['intent']['slots']['Time']['value']['interpretedValue'])
-    
     customerEmail = check_key_error(lambda: event['sessionState']['intent']['slots']['Email']['value']['interpretedValue'])
 
-    # Load confirmation history and track the current reservation.
+    # load the reservation information
     load_for_sqs = json.dumps({
         'City': city,
         'Cuisine': cuisine,
@@ -40,6 +31,7 @@ def push_to_sqs(event):
         'Email': customerEmail
     })
     
+    # sent the message to the sqs
     sqs = boto3.client('sqs')
     queue_url = "https://sqs.us-east-1.amazonaws.com/439569526489/messages"
     response = sqs.send_message(
@@ -47,25 +39,25 @@ def push_to_sqs(event):
         MessageBody = load_for_sqs
         )
 
-# -----------------------Validate Slots Helper Func---------------------------#
-
-#validates the city information
+# Validates the city information
 def valid_city(city, resolvedValues):
     cityList = ["manhattan", "queens", "flushing", "nyc"]
+    
     if len(resolvedValues) > 0:
         if city in cityList:
             return True
     return False
 
-#checks the cusine data
+# Validates the cuisine information
 def valid_cuisine(cuisine, resolvedValues):
-    cuisineList = ["bengali", "indian", "chinese", "thai"]
+    cuisineList = ["indian", "italian", "ethiopian", "american", "mexican", "japanese", "french", "spanish", "chinese"]
+    
     if len(resolvedValues) > 0:
         if cuisine.lower() in cuisineList:
             return True
     return False
 
-#check valid count
+# Validates the people information
 def valid_participant_count(ParticipantCount):
     try:
         count = int(ParticipantCount)
@@ -76,14 +68,15 @@ def valid_participant_count(ParticipantCount):
     except ValueError:
         return False
 
-#checks for the valid date    
+# Validates the date information  
 def valid_date(date):
     date = dateutil.parser.parse(date)
+    
     if date < dateutil.utils.today():
         return False
     return True
 
-#check for valid time
+# Validates the time information  
 def valid_time(time, date):
     date = dateutil.parser.parse(date).date()
     time = dateutil.parser.parse(time).time()
@@ -99,17 +92,15 @@ def valid_email(customerEmail):
         return True
     return False
 
-# ----------------------Validate Slots----------------------------------------#
 
-#checks for the key error
+# Checks for the key error
 def check_key_error(func):
     try:
         return func()
     except TypeError:
         return None
 
-
-#when valid is not right it asks for the slot value again
+# Return in case slot is invalid
 def ask_for_valid_slot(valid, slot, msg):
     response = {
         'valid': valid,
@@ -121,7 +112,7 @@ def ask_for_valid_slot(valid, slot, msg):
     }
     return response
 
-#validates the slots
+
 def validate_slots(slots):
     city = check_key_error(lambda: slots['City']['value']['interpretedValue'])
     cuisine = check_key_error(lambda: slots['Cuisine']['value']['interpretedValue'])
@@ -146,7 +137,6 @@ def validate_slots(slots):
                 'Your cusine choice is not found, can you please choose anoether one?'.format(cuisine)
                 )
     
-    
     if ParticipantCount:
         if not valid_participant_count(slots['People']['value']['interpretedValue']):
             return ask_for_valid_slot(
@@ -154,6 +144,7 @@ def validate_slots(slots):
                 ParticipantCount,
                 "Please enter valid participant number. (between 1 to 12)"
                 )
+
     if date:
         if valid_date(slots['Date']['value']['interpretedValue']) == False:
             return ask_for_valid_slot(
@@ -169,43 +160,22 @@ def validate_slots(slots):
                 time,
                 "Please enter a valid time. (e.g. 7:00 PM)"
                 )
-    print("HELLLOOOO")
-    logger.debug(f'line{150}')
     
     if customerEmail:
-        logger.debug(f'line{153}')
         if valid_email(slots['Email']['value']['interpretedValue']) == False:
-            logger.debug(f'line{155}')
             return ask_for_valid_slot(
                 False,
                 customerEmail,
                 'Invalid email, please try again. (e.g. username@domain.com)'
                 )
     
-    print("DONE")
     response = {
         'valid': True
     }
                 
     return response
-    
-# ----------------------------Delegate Actions--------------------------------#
-def dialogAction_delegate(intent_name, slots):
-    response = {
-        'sessionState': {
-            'dialogAction':{
-                'type': 'Delegate',
-            },
-            'intent':{
-                'name': intent_name,
-                'slots': slots,
-                'state': 'ReadyForfillment'
-            }
-        }
-    }
-    
-    return response
 
+# Set slot to Elicit
 def dialogAction_elicit_slot(intent_name, slots, slot_to_elicit, msg):
     return {
         'messages': [msg],
@@ -221,46 +191,10 @@ def dialogAction_elicit_slot(intent_name, slots, slot_to_elicit, msg):
             }
         }
     }
-    
-def dialogAction_close(intent_name, msg):
-    return {
-        'messages': [msg],
-        'sessionState': {
-            'dialogAction': {
-                'type': 'Close',
-            },
-            'intent': {
-                'name': intent_name,
-                'state': 'Fulfilled'
-            }
-        }
-    }
 
-# ----------------------------------------------------------------------------#
+
+# Checking the slots
 def restuarant_suggestions(intent_request):
-    cuisine = check_key_error(lambda: intent_request['sessionState']['intent']['slots']['Cuisine']['value']['interpretedValue'])
-        
-    city = check_key_error(lambda: intent_request['sessionState']['intent']['slots']['City']['value']['interpretedValue'])
-    
-    ParticipantCount = check_key_error(lambda: intent_request['sessionState']['intent']['slots']['People']['value']['interpretedValue'])
-    
-    date = check_key_error(lambda: intent_request['sessionState']['intent']['slots']['Date']['value']['interpretedValue'])
-
-    time = check_key_error(lambda: intent_request['sessionState']['intent']['slots']['Time']['value']['interpretedValue'])
-    
-    customerEmail = check_key_error(lambda: intent_request['sessionState']['intent']['slots']['Email']['value']['interpretedValue'])
-
-    # Load confirmation history and track the current reservation.
-    load_for_sqs = json.dumps({
-        'City': city,
-        'Cuisine': cuisine,
-        'People': ParticipantCount,
-        'Date': date,
-        'Time': time,
-        'Email': customerEmail
-    })
-    print("EHLOOOO")
-    print(customerEmail)
     
     if intent_request['invocationSource'] == 'DialogCodeHook':
         
@@ -268,8 +202,8 @@ def restuarant_suggestions(intent_request):
         re_validated_slot = validate_slots(intent_request['sessionState']['intent']['slots'])
         if re_validated_slot['valid'] == False:
             slots = intent_request['sessionState']['intent']['slots']
-            
-            #updates the slot
+        
+            # Updates the slot
             slots[re_validated_slot['slot']] = None
             
             response = dialogAction_elicit_slot(
@@ -280,41 +214,17 @@ def restuarant_suggestions(intent_request):
                 
             intent_request['messages'] = response['messages']
             intent_request["proposedNextState"]["dialogAction"] = response['sessionState']['dialogAction']
-            return response
 
-        
-        # if city and cuisine and ParticipantCount and date and time and customerEmail:
-        #     print(load_for_sqs)
-        #     push_to_sqs(load_for_sqs)
-            
-        #     return dialogAction_delegate(
-        #         intent_request['sessionState']['intent']['name'],
-        #         intent_request['sessionState']['intent']['slots'])
-                
-# ----------------------------------------------------------------------------#
 def lambda_handler(event, context):
     
-    print(event)
-    # Check the Cloudwatch logs to understand data inside event and
-    # parse it to handle logic to validate user input and send it to Lex
-    # Lex called LF1 with the user message and previous related state so
-    # you can verify the user input. Validate and let Lex know what to do next.
-    
     resp = {"statusCode": 200, "sessionState": event["sessionState"]}
-    # Lex will propose a next state if available but if user input is not valid,
-    # you will modify it to tell Lex to ask the same question again (meaning ask
-    # the current slot question again)
-
-    #set's EST as default time zone of this program
     os.environ['TZ'] = 'America/New_York'
     time.tzset()
     
     if "proposedNextState" not in event:
         resp["sessionState"]["dialogAction"] = {"type": "Close"}
         push_to_sqs(event)
-        
     else:
-        
         resp["sessionState"]["dialogAction"] = event["proposedNextState"]["dialogAction"]
         restuarant_suggestions(event)
     

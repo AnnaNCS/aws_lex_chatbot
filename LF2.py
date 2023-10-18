@@ -9,7 +9,7 @@ from botocore.vendored import requests
 REGION = 'us-east-1'
 HOST = 'search-domainnew-pbje5ydguhee4vwekzjjosqaby.us-east-1.es.amazonaws.com'
 INDEX = 'restaurants'
-db = boto3.resource('dynamodb').Table('correct_indian')
+db = boto3.resource('dynamodb').Table('final_db')
 
 def query(term):
     q = {'size': 5, 'query': {'multi_match': {'query': term}}}
@@ -24,13 +24,10 @@ def query(term):
                         connection_class=RequestsHttpConnection)
 
     res = client.search(index=INDEX, body=q)
-    print(res)
-
     hits = res['hits']['hits']
     results = []
     for hit in hits:
         results.append(hit['_source'])
-
     return results
 
 
@@ -46,10 +43,7 @@ def get_awsauth(region, service):
 def queryDynamo(ids):
     results = []
     for id in ids:
-        print(id)
         response = db.query(KeyConditionExpression = Key("Business ID").eq(id))
-        print("INSEIDE THE QUERY SYBAMO")
-        print(response)
         results.append(response["Items"][0])
     return results
 
@@ -69,15 +63,11 @@ def lambda_handler(event, context):
             'All'
         ],
         VisibilityTimeout=0,
-        WaitTimeSeconds=0
-    )
-    print('RESPONSEEEEEEE')
+        WaitTimeSeconds=0)
+        
     d = response['Messages'][0]
     msg_body = json.loads(d['Body'])
-    print('This is message bodyyyyyyy', msg_body)
-    
 
-    
     if 'Messages' in response:
         # Extract the message body from the received message
         message = msg_body
@@ -89,22 +79,17 @@ def lambda_handler(event, context):
         time = msg_body.get('Time')
         email = 'ss6960@columbia.edu'
         
-        # getting the message from the open source
+        # Getting the message from the open source
         query_resp = query(cuisine)
-        print('QUERY RESPONSEEEEEEE', query_resp)
     
         ids = []
         for i in range(0,5):
             ids.append(query_resp[i]['restaurant'])
         
-        print(ids)
-        
-        # pulling the restaurant information from the dynamoDB
+        # Pulling the restaurant information from the dynamoDB
         db_rest = queryDynamo(ids)
-        print('THIS IS DYNAMODB DATAAAA')
-        print(db_rest[0]['CuisineType/S'])
         
-        # sending the confirmation to the email
+        # Sending the confirmation to the email
         
         client = boto3.client("ses")
         subject = "Reservation Details"
@@ -114,21 +99,19 @@ def lambda_handler(event, context):
         for i in range(0,5): 
             body += str(i) + ': ' + db_rest[i]['Name'] + 'at' + db_rest[i]['Address']+'\n'
             
-        print('THIS IS BODY')
-        print(body)
         # Send the email
         email_response = client.send_email(
-            Source="ss6960@columbia.edu",
-            Destination={"ToAddresses": [email]},
-            Message={"Subject": {"Data": subject}, "Body": {"Html": {"Data": body}}}
+            Source = "ss6960@columbia.edu",
+            Destination = {"ToAddresses": [email]},
+            Message = {"Subject": {"Data": subject}, "Body": {"Html": {"Data": body}}}
         )
         
         # Delete the received message from the SQS queue
-        # receipt_handle = message['ReceiptHandle']
-        # sqs.delete_message(
-        #     QueueUrl=sqs_queue_url,
-        #     ReceiptHandle=receipt_handle
-        # )
+        receipt_handle = response['Messages'][0]['ReceiptHandle']
+        sqs.delete_message(
+            QueueUrl = sqs_queue_url,
+            ReceiptHandle = receipt_handle
+        )
         
         return email_response
     
